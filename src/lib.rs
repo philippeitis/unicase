@@ -2,13 +2,7 @@
 #![cfg_attr(test, deny(warnings))]
 #![doc(html_root_url = "https://docs.rs/unicase/2.6.0")]
 #![cfg_attr(feature = "nightly", feature(test))]
-#![cfg_attr(
-    all(
-        __unicase__core_and_alloc,
-        not(test),
-    ),
-    no_std,
-)]
+#![cfg_attr(all(__unicase__core_and_alloc, not(test),), no_std)]
 
 //! # UniCase
 //!
@@ -74,14 +68,20 @@ use self::unicode::Unicode;
 
 mod ascii;
 mod unicode;
-pub mod serde;
+// pub mod serde;
+#[cfg(feature = "serde")]
+extern crate serde;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 /// Case Insensitive wrapper of strings.
 #[derive(Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct UniCase<S>(Encoding<S>);
 
 /// Case Insensitive wrapper of Ascii strings.
 #[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct Ascii<S>(S);
 
 /// Compare two string-like types for case-less equality, using unicode folding.
@@ -104,25 +104,25 @@ pub fn eq_ascii<S: AsRef<str> + ?Sized>(left: &S, right: &S) -> bool {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 enum Encoding<S> {
     Ascii(Ascii<S>),
     Unicode(Unicode<S>),
 }
 
 macro_rules! inner {
-
-    (mut $e:expr) => ({
+    (mut $e:expr) => {{
         match &mut $e {
             &mut Encoding::Ascii(ref mut s) => &mut s.0,
             &mut Encoding::Unicode(ref mut s) => &mut s.0,
         }
-    });
-    ($e:expr) => ({
+    }};
+    ($e:expr) => {{
         match &$e {
             &Encoding::Ascii(ref s) => &s.0,
             &Encoding::Unicode(ref s) => &s.0,
         }
-    });
+    }};
 }
 
 impl<S: AsRef<str> + Default> Default for UniCase<S> {
@@ -215,7 +215,6 @@ impl<S: AsRef<str>> AsRef<str> for UniCase<S> {
     fn as_ref(&self) -> &str {
         inner!(self.0).as_ref()
     }
-
 }
 
 impl<S: fmt::Debug> fmt::Debug for UniCase<S> {
@@ -231,7 +230,6 @@ impl<S: fmt::Display> fmt::Display for UniCase<S> {
         fmt::Display::fmt(inner!(self.0), fmt)
     }
 }
-
 
 impl<S1: AsRef<str>, S2: AsRef<str>> PartialEq<UniCase<S2>> for UniCase<S1> {
     #[inline]
@@ -252,7 +250,7 @@ impl<S: AsRef<str>> Hash for UniCase<S> {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
         match self.0 {
             Encoding::Ascii(ref s) => s.hash(hasher),
-            Encoding::Unicode(ref s) => s.hash(hasher)
+            Encoding::Unicode(ref s) => s.hash(hasher),
         }
     }
 }
@@ -275,13 +273,13 @@ macro_rules! from_impl {
 }
 
 macro_rules! into_impl {
-    ($to:ty) => (
+    ($to:ty) => {
         impl<'a> Into<$to> for UniCase<$to> {
             fn into(self) -> $to {
                 self.into_inner()
             }
         }
-    );
+    };
 }
 
 impl<S: AsRef<str>> From<S> for UniCase<S> {
@@ -315,13 +313,15 @@ impl<T: AsRef<str>> Ord for UniCase<T> {
         match (&self.0, &other.0) {
             (&Encoding::Ascii(ref x), &Encoding::Ascii(ref y)) => x.cmp(y),
             (&Encoding::Unicode(ref x), &Encoding::Unicode(ref y)) => x.cmp(y),
-            (&Encoding::Ascii(ref x), &Encoding::Unicode(ref y)) => Unicode(x.as_ref()).cmp(&Unicode(y.0.as_ref())),
-            (&Encoding::Unicode(ref x), &Encoding::Ascii(ref y)) => Unicode(x.0.as_ref()).cmp(&Unicode(y.as_ref())),
+            (&Encoding::Ascii(ref x), &Encoding::Unicode(ref y)) => {
+                Unicode(x.as_ref()).cmp(&Unicode(y.0.as_ref()))
+            }
+            (&Encoding::Unicode(ref x), &Encoding::Ascii(ref y)) => {
+                Unicode(x.0.as_ref()).cmp(&Unicode(y.as_ref()))
+            }
         }
     }
 }
-
-
 
 impl<S: FromStr + AsRef<str>> FromStr for UniCase<S> {
     type Err = <S as FromStr>::Err;
@@ -333,11 +333,11 @@ impl<S: FromStr + AsRef<str>> FromStr for UniCase<S> {
 #[cfg(test)]
 mod tests {
     use super::UniCase;
-    use std::hash::{Hash, Hasher};
-    #[cfg(not(__unicase__default_hasher))]
-    use std::hash::SipHasher as DefaultHasher;
     #[cfg(__unicase__default_hasher)]
     use std::collections::hash_map::DefaultHasher;
+    #[cfg(not(__unicase__default_hasher))]
+    use std::hash::SipHasher as DefaultHasher;
+    use std::hash::{Hash, Hasher};
 
     fn hash<T: Hash>(t: &T) -> u64 {
         let mut s = DefaultHasher::new();
@@ -370,7 +370,6 @@ mod tests {
         assert!(b.is_ascii());
         assert!(c.is_ascii());
     }
-
 
     #[test]
     fn test_eq_unicode() {
